@@ -24,6 +24,7 @@ const db = app ? getFirestore(app) : null;
 
 export default function ThailandTripDestinationsSelector() {
   const friends = ["נועמסה", "שיכורם", "יהיר"];
+  const recommenderName = "החתול הממליץ";
 
   const destinations = [
     {
@@ -219,6 +220,7 @@ export default function ThailandTripDestinationsSelector() {
   const [roomId] = useState(getRoomIdFromUrl);
   const [votes, setVotes] = useState(buildDefaultVotes);
   const [notes, setNotes] = useState("");
+  const [recommenderNotes, setRecommenderNotes] = useState({});
   const [syncStatus, setSyncStatus] = useState("טוען נתונים...");
 
   useEffect(() => {
@@ -236,12 +238,14 @@ export default function ThailandTripDestinationsSelector() {
           const data = snapshot.data();
           if (data.votes) setVotes(data.votes);
           if (typeof data.notes === "string") setNotes(data.notes);
+          if (data.recommenderNotes) setRecommenderNotes(data.recommenderNotes);
           setSyncStatus("מסונכרן לכל המכשירים");
         } else {
           const initialData = {
             roomId,
             votes: buildDefaultVotes(),
             notes: "",
+            recommenderNotes: {},
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           };
@@ -257,7 +261,7 @@ export default function ThailandTripDestinationsSelector() {
     return () => unsubscribe();
   }, [roomId]);
 
-  const saveData = async (nextVotes, nextNotes) => {
+  const saveData = async (nextVotes, nextNotes, nextRecNotes = recommenderNotes) => {
     if (!db) {
       setSyncStatus("אי אפשר לשמור בלי Firebase");
       return;
@@ -271,6 +275,7 @@ export default function ThailandTripDestinationsSelector() {
           roomId,
           votes: nextVotes,
           notes: nextNotes,
+          recommenderNotes: nextRecNotes,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -290,12 +295,21 @@ export default function ThailandTripDestinationsSelector() {
       },
     };
     setVotes(nextVotes);
-    saveData(nextVotes, notes);
+    saveData(nextVotes, notes, recommenderNotes);
+  };
+
+  const setRecommenderNote = (destinationId, text) => {
+    const nextRecNotes = {
+      ...recommenderNotes,
+      [destinationId]: text,
+    };
+    setRecommenderNotes(nextRecNotes);
+    saveData(votes, notes, nextRecNotes);
   };
 
   const handleNotesChange = (value) => {
     setNotes(value);
-    saveData(votes, value);
+    saveData(votes, value, recommenderNotes);
   };
 
   const results = useMemo(() => {
@@ -470,6 +484,46 @@ export default function ThailandTripDestinationsSelector() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl bg-orange-50 border border-orange-200 p-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center text-xl shadow-sm">
+                        🐱
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-orange-900">{recommenderName}</div>
+                        <div className="text-xs text-orange-700">דעה אישית של המומחה (לא נספר בניקוד)</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-4">
+                      <div className="flex gap-2 flex-wrap">
+                        {[0, 1, 2].map((value) => (
+                          <button
+                            key={value}
+                            onClick={() => setVote(destination.id, recommenderName, value)}
+                            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                              (votes[destination.id]?.[recommenderName] || 0) === value
+                                ? "bg-orange-500 text-white border-orange-600 ring-2 ring-offset-1 ring-orange-300"
+                                : "bg-white text-orange-600 border-orange-200 hover:bg-orange-100"
+                            }`}
+                          >
+                            {scoreLabels[value]}
+                          </button>
+                        ))}
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-orange-800 uppercase tracking-wider">הערת החתול:</label>
+                        <textarea
+                          value={recommenderNotes[destination.id] || ""}
+                          onChange={(e) => setRecommenderNote(destination.id, e.target.value)}
+                          placeholder="מה החתול חושב על המקום הזה?..."
+                          className="w-full min-h-[80px] rounded-xl border border-orange-200 bg-white/50 p-3 text-sm text-slate-800 placeholder:text-orange-300 focus:ring-2 focus:ring-orange-400 outline-none transition-all"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
